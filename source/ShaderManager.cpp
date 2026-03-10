@@ -3,15 +3,16 @@
 
 namespace gfx {
 
-ShaderManager::ShaderManager(std::vector<ShaderProgramFilePaths> shaderSources, QOpenGLExtraFunctions* openGLFunctions)
-    : m_openGLFunctions(openGLFunctions)
+ShaderManager::ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions* openGLFunctions)
+    : ResourceManager<Shader>(assetRegistry, supportedShaderFileTypes), 
+      m_openGLFunctions(openGLFunctions)
 {
-    for (const auto& shaderSource : shaderSources)
-    {
-        Shader compiledShader = Shader(shaderSource.fragmentShader.string(), shaderSource.vertexShader.string(), shaderSource.setName, m_openGLFunctions);
+    // for (const auto& shaderSource : shaderSources)
+    // {
+    //     Shader compiledShader = Shader(shaderSource.fragmentShader.string(), shaderSource.vertexShader.string(), shaderSource.setName, m_openGLFunctions);
 
-        shaders[shaderSource.setName] = std::make_unique<Shader>(compiledShader);
-    }
+    //     shaders[shaderSource.setName] = std::make_unique<Shader>(compiledShader);
+    // }
 }
 
 Shader* ShaderManager::getShaderPtr(std::string shaderName)
@@ -31,6 +32,12 @@ Shader* ShaderManager::getShaderPtr(GLuint shaderID)
 
     return nullptr;
 }
+
+void ShaderManager::refreshElements()
+{
+    return;
+}
+
 
 void ShaderManager::printAllShaderPrograms()
 {

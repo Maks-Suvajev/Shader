@@ -8,19 +8,26 @@
 #include "Shader.h"
 #include "ShaderTypes.h"
 
+#include "AssetRegistry.h"
+#include "ResourceManager.h"
+
 // QT
 #include <QOpenGLExtraFunctions>
 
 namespace gfx {
 
-class ShaderManager
+class ShaderManager : public ResourceManager<Shader>
 {
     public:
-        ShaderManager(std::vector<ShaderProgramFilePaths> shaderSources, QOpenGLExtraFunctions* openGLFunctions);
+        ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions* openGLFunctions);
+
         Shader* getShaderPtr(std::string shaderName);
         Shader* getShaderPtr(GLuint shaderID);
+
         GLuint getShaderID(std::string shaderName);
         void printAllShaderPrograms();
+
+        void refreshElements();
 
     private:
         std::unordered_map<std::string, std::unique_ptr<Shader>> shaders;
