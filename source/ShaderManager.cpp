@@ -4,25 +4,27 @@
 namespace gfx {
 
 ShaderManager::ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions* openGLFunctions)
-    : ResourceManager<Shader>(assetRegistry, supportedShaderFileTypes), 
+    : ResourceManager<ShaderSource>(assetRegistry, supportedShaderFileTypes), 
       m_openGLFunctions(openGLFunctions)
 {
-    // for (const auto& shaderSource : shaderSources)
-    // {
-    //     Shader compiledShader = Shader(shaderSource.fragmentShader.string(), shaderSource.vertexShader.string(), shaderSource.setName, m_openGLFunctions);
+    m_activeDirectory = assetRegistry->getDefaultAssetPath<ShaderSource>();
 
-    //     shaders[shaderSource.setName] = std::make_unique<Shader>(compiledShader);
-    // }
+    refreshElements();
 }
 
-Shader* ShaderManager::getShaderPtr(std::string shaderName)
+Shader* ShaderManager::getShaderPtr(const std::string& shaderName)
 {
-    return shaders[shaderName].get();
+    if (!m_shaders.contains(shaderName))
+    {
+        return nullptr;
+    }
+
+    return m_shaders[shaderName].get();
 }
 
 Shader* ShaderManager::getShaderPtr(GLuint shaderID)
 {
-    for (const auto& [key, shader] : shaders)
+    for (const auto& [key, shader] : m_shaders)
     {
         if (shaderID == shader->getShaderID())
         {
@@ -33,38 +35,310 @@ Shader* ShaderManager::getShaderPtr(GLuint shaderID)
     return nullptr;
 }
 
-void ShaderManager::refreshElements()
+std::string ShaderManager::loadShaderCode(const std::string& shaderPath)
 {
-    return;
-}
+    std::ifstream shaderFile(shaderPath);
 
+    shaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
-void ShaderManager::printAllShaderPrograms()
-{
-    std::cout << "-----------------------------------------------------------------" << std::endl;
-    std::cout << "| ----- Printing currently available shaders and their IDs----- |" << std::endl;
-
-    for (auto& [key, item] : shaders)
+    if (!shaderFile.is_open())
     {
-        std::cout << "-----------------------------------------------------------------" << std::endl;
-        std::cout << "Key: " << key << std::endl;
-
-        if (item)
-        {
-            std::cout << "Name: " << item->getShaderName() << "Shader ID: " << item->getShaderID() << std::endl;
-        }
-        else
-        {
-            std::cout << "Path: NULLPTR" << std::endl;
-        }        
+        throw std::ios_base::failure("ERROR::FAILED TO OPEN FILE: " + shaderPath); 
     }
 
-    std::cout << "-----------------------------------------------------------------" << std::endl;
+    std::stringstream shaderStream;	
+
+    shaderStream << shaderFile.rdbuf();
+
+    return shaderStream.str();
 }
 
-GLuint ShaderManager::getShaderID(std::string shaderName)
+void ShaderManager::compileShaderProgram(const std::string& shaderSourceKeyA, const std::string& shaderSourceKeyB, const std::string& name)
+{
+    bool vertexShaderInputted   = shaderSourceKeyA.ends_with(vertShaderExtension) || shaderSourceKeyB.ends_with(vertShaderExtension);
+    bool fragmentShaderInputted = shaderSourceKeyA.ends_with(fragShaderExtension) || shaderSourceKeyB.ends_with(fragShaderExtension);
+
+    if (!(vertexShaderInputted && fragmentShaderInputted))
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::compileShaderProgram::Input must be 1 vertex and 1 fragment shader." << std::endl;
+        #endif
+
+        return;
+    }
+
+    std::string normalisedKeyA = normaliseStringKey(shaderSourceKeyA);
+    std::string normalisedKeyB = normaliseStringKey(shaderSourceKeyB);
+
+    if (!m_elements.contains(normalisedKeyA))
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::compileShaderProgram::Selected vertex shader source doesn't exist: " << shaderSourceKeyA << std::endl;
+        #endif
+
+        return;
+    }
+
+    if (!m_elements.contains(normalisedKeyB))
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::compileShaderProgram::Selected fragment shader source doesn't exist: " << shaderSourceKeyB << std::endl;
+        #endif
+
+        return;
+    }
+
+    if (m_shaders.contains(name) || name.empty())
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::compileShaderProgram:::Shader with given name already exists or is null: " << name << std::endl;
+        #endif
+
+        return;
+    }
+
+    ShaderSource* sourceA = m_elements.at(normalisedKeyA).get();
+
+    if (!ensureCompiled(sourceA))
+    {
+        return;
+    }
+
+    ShaderSource* sourceB = m_elements.at(normalisedKeyB).get();
+
+    if (!ensureCompiled(sourceB))
+    {
+        return;
+    }
+
+    m_shaders[name] = std::make_unique<Shader>(sourceA, sourceB, name, m_openGLFunctions);
+}
+
+bool ShaderManager::ensureCompiled(ShaderSource* source)
+{
+    if (source->status != SourceStatus::Compiled)
+    {
+        source->compiledID = compileShader(source);
+
+        if (source->status != SourceStatus::Compiled)
+        {
+            #ifdef ENABLE_DEBUG_MESSAGES
+                std::cout << "ERROR::ShaderManager::compileShaderProgram::Failed to compile shader: " << source->name << std::endl;
+            #endif
+            return false;
+        }
+    }
+
+    return true;
+}
+
+GLuint ShaderManager::compileShader(ShaderSource* source)
+{
+    if (source == nullptr)
+    {
+        return 0;
+    }
+
+    GLuint shaderObject;
+
+    const char* rawSource = source->sourceCode.c_str();
+
+    shaderObject = m_openGLFunctions->glCreateShader(source->type);
+
+    m_openGLFunctions->glShaderSource(shaderObject, 1, &rawSource, NULL);
+
+    m_openGLFunctions->glCompileShader(shaderObject);
+
+    checkShaderCompilation(shaderObject, source);
+
+    return shaderObject;
+}
+
+GLuint ShaderManager::compileShaderWithKey(const std::string& key)
+{
+    return compileShader(getSource(key));
+}
+
+std::string ShaderManager::normaliseStringKey(const std::string& key)
+{
+    namespace fs = std::filesystem;
+
+    std::string normalisedString;
+
+    try
+    {
+        normalisedString = fs::canonical(fs::path(key)).generic_string();    
+    }
+    catch(const std::exception& e)
+    {
+        return fs::canonical(fs::path()).generic_string();
+    }
+
+    return normalisedString;
+}
+
+ShaderSource* ShaderManager::getSource(const std::string& key)
+{
+    std::string normalisedKey = normaliseStringKey(key);
+
+    if (!m_elements.contains(normalisedKey))
+    {
+        return nullptr;
+    }
+
+    return m_elements[normalisedKey].get();
+}
+
+void ShaderManager::unloadShader(const std::string& key)
+{
+    std::string normalisedKey = normaliseStringKey(key);
+
+    ShaderSource* source = m_elements.at(normalisedKey).get();
+
+    if (source->status != SourceStatus::Compiled)
+    {
+        return;
+    }
+
+    m_openGLFunctions->glDeleteShader(source->compiledID);
+
+    source->status = SourceStatus::Loaded;
+}
+
+void linkedKeyCleanup(ShaderSource* source, const std::string& key)
+{
+    std::erase_if(source->linkedShaderKeys, [key](auto& linkedKey){
+        return (linkedKey == key);
+    });
+}
+
+void ShaderManager::unloadShaderProgram(const std::string& key)
+{
+    if (!m_shaders.contains(key) || key.empty())
+    {
+        return;
+    }
+
+    std::for_each(m_elements.begin(), m_elements.end(), [key](auto& element){
+        linkedKeyCleanup(element.second.get(), key);
+    });
+    
+    m_shaders.erase(key);
+}
+
+
+void ShaderManager::checkShaderCompilation(GLuint shaderID, ShaderSource* source)
+{
+    int success;
+    m_openGLFunctions->glGetShaderiv(shaderID, GL_COMPILE_STATUS, &success);
+
+    int logLength;
+    m_openGLFunctions->glGetShaderiv(shaderID, GL_INFO_LOG_LENGTH, &logLength);
+
+    std::string infoLog(logLength, '\0');
+    m_openGLFunctions->glGetShaderInfoLog(shaderID, logLength, nullptr, infoLog.data()); 
+    
+    source->infoLog = infoLog;
+
+    if (!success)
+    {
+        source->status = SourceStatus::CompilationError;
+
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::SHADER::COMPILATION_FAILED\n" << infoLog << std::endl; // Replace with logging module
+        #endif
+
+        return;
+    }
+    
+    source->compiledID = shaderID;
+    source->status = SourceStatus::Compiled;
+}
+
+void ShaderManager::registerElement(const std::filesystem::path& sourcePath)
+{
+    std::filesystem::path normalisedPath;
+
+    try
+    {
+        normalisedPath = std::filesystem::canonical(sourcePath);
+    }
+    catch(const std::exception& e)
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::registerElement:: Source path doesn't exist: " << sourcePath.string() << std::endl;
+        #endif       
+        return;
+    }
+    
+    const auto key = normalisedPath.generic_string();
+
+    if (m_elements.contains(key))
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::Source already loaded with the key: " << sourcePath.string() << std::endl;
+        #endif
+
+        return;
+    }
+ 
+    ShaderSource sourceData{};
+
+    if (sourcePath.filename().extension() == vertShaderExtension)
+    {
+        sourceData.type = GL_VERTEX_SHADER;
+    }
+    else if (sourcePath.filename().extension() == fragShaderExtension)
+    {
+        sourceData.type = GL_FRAGMENT_SHADER;
+    }
+    else
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::registerSource:: Not a valid fragment or vertex shader." << sourcePath.string() << std::endl;
+        #endif
+        return;
+    }
+
+    sourceData.name = normalisedPath.filename().string();
+    sourceData.systemSourcePath = normalisedPath;
+
+    try
+    {
+        sourceData.sourceCode = loadShaderCode(sourceData.systemSourcePath.string());
+    }
+    catch(const std::exception& e)
+    {
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::registerSource::loadShaderCode::" <<  e.what() << std::endl;
+        #endif
+
+        return;
+    }
+    
+    if (sourceData.sourceCode.empty())
+    {
+        sourceData.status = SourceStatus::EmptyFileError;
+    }
+    else
+    {
+        sourceData.status = SourceStatus::Loaded;
+    }
+
+    m_elements[key]  = std::make_unique<ShaderSource>(std::move(sourceData));     
+}
+
+GLuint ShaderManager::getShaderID(const std::string& shaderName)
 {
     return getShaderPtr(shaderName)->getShaderID();
 }
 
+const std::unordered_map<std::string, std::unique_ptr<Shader>>& ShaderManager::getCompiledMap()
+{
+    return m_shaders;
 }
+
+
+}
+
+         

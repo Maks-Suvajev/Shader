@@ -5,28 +5,34 @@
 
 namespace gfx {
 
-	Shader::Shader(const std::string& fragmentShaderPath, const std::string& vertexShaderPath, const std::string uniqueShaderName, QOpenGLExtraFunctions* openGLFunctions)
+	Shader::Shader(ShaderSource* sourceA, ShaderSource* sourceB, const std::string name, QOpenGLExtraFunctions* openGLFunctions)
 	: m_modelMatrixLocation(glUniformLocationLoadError),
 	  m_viewMatrixLocation(glUniformLocationLoadError),
 	  m_projectionMatrixLocation(glUniformLocationLoadError),
       m_openGLFunctions(openGLFunctions),
-      m_shaderName(uniqueShaderName)
-	{
-		std::string vertexShaderCode = loadShaderCode(vertexShaderPath); 
-		std::string fragmentShaderCode = loadShaderCode(fragmentShaderPath);
-
-		GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderCode.c_str());
-		GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderCode.c_str());
-
-		compileShaderProgram(vertexShader, fragmentShader);
+      m_shaderName(name),
+      m_programLinkStatus(ShaderProgramStatus::Unlinked)
+    {
+		linkShaderProgram(sourceA->compiledID, sourceB->compiledID);
 
 		useProgram();
 
-		loadEachFileShaderVariables(vertexShaderCode, fragmentShaderCode);
+		loadEachFileShaderVariables(sourceA->sourceCode.c_str(), sourceB->sourceCode.c_str());
 
 		initialiseMvpMatrices();
 
 	}
+
+    Shader::~Shader()
+    {
+        m_openGLFunctions->glDeleteProgram(m_shaderID);
+    }
+
+    void Shader::documentSourcefiles(ShaderSource* sourceA, ShaderSource* sourceB)
+    {
+        m_sourceFiles.push_back(sourceA->systemSourcePath);
+        m_sourceFiles.push_back(sourceB->systemSourcePath);
+    }
 
 	void Shader::initialiseMvpMatrices()
 	{
@@ -42,96 +48,37 @@ namespace gfx {
 		updateProjectionMatrixValue(glm::mat4(1.0f));
 	}
 
-	void Shader::checkShaderCompilation(GLuint shaderID)
-	{
-		int success;
-		char infoLog[512];
-		m_openGLFunctions->glGetShaderiv(shaderID, GL_COMPILE_STATUS, &success);
 
-		if (!success)
-		{
-			m_openGLFunctions->glGetShaderInfoLog(shaderID, 512, NULL, infoLog);
-
-            #ifdef ENABLE_DEBUG_MESSAGES
-			    std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl; // Replace with logging module
-            #endif
-
-		}
-	}
-
-	std::string Shader::loadShaderCode(const std::string& shaderPath)
-	{
-		std::string shaderCode;
-		std::ifstream shaderFile(shaderPath);
-
-		if (!shaderFile.is_open())
-		{
-			throw std::ios_base::failure("Failed to open fragment shader: " + shaderPath);
-		}
-
-		shaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-
-		std::stringstream shaderStream;	
-
-		try
-		{
-			shaderStream << shaderFile.rdbuf();
-
-			shaderFile.close();
-
-			shaderCode = shaderStream.str();
-		}
-		catch (std::ifstream::failure& e)
-		{
-            #ifdef ENABLE_DEBUG_MESSAGES
-			    std::cout << "ERROR::SHADER::READING FILE: " << e.what() << std::endl;
-            #else
-                (void)e;
-            #endif
-		}
-
-		return shaderCode;
-	}
-
-	GLuint Shader::compileShader(GLenum shaderType, char const * shaderCode)
-	{
-		GLuint shaderObject;
-
-		shaderObject = m_openGLFunctions->glCreateShader(shaderType);
-
-		m_openGLFunctions->glShaderSource(shaderObject, 1, &shaderCode, NULL);
-
-		m_openGLFunctions->glCompileShader(shaderObject);
-
-		checkShaderCompilation(shaderObject);
-
-		return shaderObject;
-	}
-
-	void Shader::compileShaderProgram(GLuint vertexShader, GLuint fragmentShader)
+	void Shader::linkShaderProgram(GLuint shaderA, GLuint shaderB)
 	{
 		m_shaderID = m_openGLFunctions->glCreateProgram();
 
-		m_openGLFunctions->glAttachShader(m_shaderID, vertexShader);
-		m_openGLFunctions->glAttachShader(m_shaderID, fragmentShader);
+		m_openGLFunctions->glAttachShader(m_shaderID, shaderA);
+		m_openGLFunctions->glAttachShader(m_shaderID, shaderB);
 		m_openGLFunctions->glLinkProgram(m_shaderID);
 
 		//Check linking
 		int success;
 		m_openGLFunctions->glGetProgramiv(m_shaderID, GL_LINK_STATUS, &success);
+
 		char infoLog[512];
+		m_openGLFunctions->glGetProgramInfoLog(m_shaderID, 512, NULL, infoLog);
+
+        m_log = infoLog;
 
 		if (!success) {
-			m_openGLFunctions->glGetProgramInfoLog(m_shaderID, 512, NULL, infoLog);
+
+            m_programLinkStatus = ShaderProgramStatus::Error;
 
             #ifdef ENABLE_DEBUG_MESSAGES
 			    std::cout << "ERROR::SHADER::PROGRAM::COMPILATION_FAILED\n" << infoLog << std::endl;
             #endif
+
+            return;
 		}
+        
 
-		m_openGLFunctions->glDeleteShader(vertexShader);
-		m_openGLFunctions->glDeleteShader(fragmentShader);
-
+        m_programLinkStatus = ShaderProgramStatus::Linked;
 	}
 
 	// Pull the uniform locations for the transformation matrices Model-View-Projection (MVP)

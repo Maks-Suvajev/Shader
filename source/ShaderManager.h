@@ -16,22 +16,37 @@
 
 namespace gfx {
 
-class ShaderManager : public ResourceManager<Shader>
+class ShaderManager : public ResourceManager<ShaderSource>
 {
     public:
         ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions* openGLFunctions);
 
-        Shader* getShaderPtr(std::string shaderName);
-        Shader* getShaderPtr(GLuint shaderID);
+        Shader* getShaderPtr(const std::string& shaderName);
+        Shader* getShaderPtr(const GLuint shaderID);
 
-        GLuint getShaderID(std::string shaderName);
-        void printAllShaderPrograms();
+        GLuint getShaderID(const std::string& shaderName);
+        
+        void registerElement(const std::filesystem::path& sourcePath) override;
+        std::string loadShaderCode(const std::string& shaderPath);
 
-        void refreshElements();
+        GLuint compileShaderWithKey(const std::string& key);
+        GLuint compileShader(ShaderSource* source);
+        void unloadShader(const std::string& key);
+        void unloadShaderProgram(const std::string& key);
 
+        void compileShaderProgram(const std::string& vertKey, const std::string& fragKey, const std::string& name);
+        bool ensureCompiled(ShaderSource* source);
+
+        ShaderSource* getSource(const std::string& key);
+        std::string normaliseStringKey(const std::string& key);
+
+        const std::unordered_map<std::string, std::unique_ptr<Shader>>& getCompiledMap();
+
+ 
     private:
-        std::unordered_map<std::string, std::unique_ptr<Shader>> shaders;
+        void checkShaderCompilation(const GLuint shaderID, ShaderSource* source);
 
+        std::unordered_map<std::string, std::unique_ptr<Shader>> m_shaders;
         QOpenGLExtraFunctions* m_openGLFunctions;
 
 };
