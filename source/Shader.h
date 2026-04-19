@@ -119,7 +119,7 @@ bool Shader::updateUniformValue(const GLchar * const name, const T& value)
     }
 
     // This if statement will need to be expanded to accomodate new data types required by the system
-    if constexpr ((std::is_same_v<T, GLint> || std::is_same_v<T, bool> || std::is_same_v<T, int>)) // glsl doesn't support bools, need to treat as int
+    if constexpr (std::is_same_v<T, GLint> || std::is_same_v<T, bool> || std::is_same_v<T, int> || std::is_same_v<T, unsigned int>) // glsl doesn't support bools, need to treat as int
     {
         m_openGLFunctions->glUniform1i(valueLocation, value);
     }

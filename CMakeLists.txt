@@ -5,12 +5,13 @@ add_library(ShaderLib
 
 find_package(Qt6 REQUIRED COMPONENTS OpenGL)
 
+
 target_link_libraries(ShaderLib 
     PUBLIC
         TypeLib
-        ResourceManagersLib
         AssetsLib
         Qt6::OpenGL
+        ResourceManagerBaseLib
 )
 
 target_include_directories(ShaderLib PUBLIC

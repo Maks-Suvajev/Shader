@@ -5,7 +5,8 @@ namespace gfx {
 
 ShaderManager::ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions* openGLFunctions)
     : ResourceManager<ShaderSource>(assetRegistry, supportedShaderFileTypes), 
-      m_openGLFunctions(openGLFunctions)
+      m_openGLFunctions(openGLFunctions),
+      m_shaderAvailable(false)
 {
     m_activeDirectory = assetRegistry->getDefaultAssetPath<ShaderSource>();
 
@@ -112,6 +113,8 @@ void ShaderManager::compileShaderProgram(const std::string& shaderSourceKeyA, co
     }
 
     m_shaders[name] = std::make_unique<Shader>(sourceA, sourceB, name, m_openGLFunctions);
+
+    m_shaderAvailable = true;
 }
 
 bool ShaderManager::ensureCompiled(ShaderSource* source)

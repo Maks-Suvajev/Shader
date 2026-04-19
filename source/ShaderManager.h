@@ -42,12 +42,18 @@ class ShaderManager : public ResourceManager<ShaderSource>
 
         const std::unordered_map<std::string, std::unique_ptr<Shader>>& getCompiledMap();
 
+        const bool shaderAvailable()
+        {
+            return m_shaderAvailable;
+        }
+
  
     private:
         void checkShaderCompilation(const GLuint shaderID, ShaderSource* source);
 
         std::unordered_map<std::string, std::unique_ptr<Shader>> m_shaders;
         QOpenGLExtraFunctions* m_openGLFunctions;
+        bool m_shaderAvailable;
 
 };
 
