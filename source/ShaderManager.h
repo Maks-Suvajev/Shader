@@ -7,9 +7,11 @@
 
 #include "Shader.h"
 #include "ShaderTypes.h"
+#include "DefaultShaders.h"
 
 #include "AssetRegistry.h"
 #include "ResourceManager.h"
+
 
 // QT
 #include <QOpenGLExtraFunctions>
@@ -34,7 +36,10 @@ class ShaderManager : public ResourceManager<ShaderSource>
         void unloadShader(const std::string& key);
         void unloadShaderProgram(const std::string& key);
 
-        void compileShaderProgram(const std::string& vertKey, const std::string& fragKey, const std::string& name);
+        void loadAndCompileDefaultShader();
+        GLuint getDefaultShaderID();
+
+        void compileShaderProgram(const std::string& shaderSourceKeyA, const std::string& shaderSourceKeyB, const std::string& name);
         bool ensureCompiled(ShaderSource* source);
 
         ShaderSource* getSource(const std::string& key);

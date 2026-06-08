@@ -10,6 +10,8 @@ ShaderManager::ShaderManager(AssetRegistry* assetRegistry, QOpenGLExtraFunctions
 {
     m_activeDirectory = assetRegistry->getDefaultAssetPath<ShaderSource>();
 
+    loadAndCompileDefaultShader();
+
     refreshElements();
 }
 
@@ -336,9 +338,48 @@ GLuint ShaderManager::getShaderID(const std::string& shaderName)
     return getShaderPtr(shaderName)->getShaderID();
 }
 
+//TODO: depreciate this, non-ECS infrastructure
 const std::unordered_map<std::string, std::unique_ptr<Shader>>& ShaderManager::getCompiledMap()
 {
     return m_shaders;
+}
+
+void ShaderManager::loadAndCompileDefaultShader()
+{
+    bool compileCheck = false;
+    ShaderSource defaultVertexData{};
+    ShaderSource defaultFragmentData{};
+
+    // Set up vertex source
+    defaultVertexData.name          = defaultVertexShaderKey;
+    defaultVertexData.sourceCode    = defaultVertexShader;
+    defaultVertexData.status        = SourceStatus::Loaded;
+    defaultVertexData.type          = GL_VERTEX_SHADER;
+
+    compileCheck = ensureCompiled(&defaultVertexData);
+    assert(compileCheck == true);
+
+    m_elements[defaultVertexShaderKey]  = std::make_unique<ShaderSource>(std::move(defaultVertexData));   
+
+    // Set up fragment source
+    defaultFragmentData.name          = defaultFragmentShaderKey;
+    defaultFragmentData.sourceCode    = defaultFragmentShader;
+    defaultFragmentData.status        = SourceStatus::Loaded;
+    defaultFragmentData.type          = GL_FRAGMENT_SHADER;
+
+    compileCheck = ensureCompiled(&defaultFragmentData);
+    assert(compileCheck == true);
+
+    m_elements[defaultFragmentShaderKey]  = std::make_unique<ShaderSource>(std::move(defaultFragmentData));   
+
+    m_shaders[defaultShaderProgramKey] = std::make_unique<Shader>(m_elements[defaultVertexShaderKey].get(), m_elements[defaultFragmentShaderKey].get(), defaultShaderProgramKey, m_openGLFunctions);
+
+    m_shaderAvailable = true;
+}
+
+GLuint ShaderManager::getDefaultShaderID()
+{
+    return getShaderID(defaultShaderProgramKey);
 }
 
 
