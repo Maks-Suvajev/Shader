@@ -176,7 +176,11 @@ std::string ShaderManager::normaliseStringKey(const std::string& key)
     }
     catch(const std::exception& e)
     {
-        return fs::canonical(fs::path()).generic_string();
+        #ifdef ENABLE_DEBUG_MESSAGES
+            std::cout << "ERROR::ShaderManager::normaliseStringKey:: " <<  e.what() << std::endl;
+        #else
+            void(e);
+        #endif
     }
 
     return normalisedString;
@@ -271,8 +275,11 @@ void ShaderManager::registerElement(const std::filesystem::path& sourcePath)
     catch(const std::exception& e)
     {
         #ifdef ENABLE_DEBUG_MESSAGES
-            std::cout << "ERROR::ShaderManager::registerElement:: Source path doesn't exist: " << sourcePath.string() << std::endl;
-        #endif       
+            std::cout << "ERROR::ShaderManager::registerElement:: " << e.what() << std::endl;
+        #else
+            void(e);
+        #endif
+         
         return;
     }
     
@@ -316,6 +323,8 @@ void ShaderManager::registerElement(const std::filesystem::path& sourcePath)
     {
         #ifdef ENABLE_DEBUG_MESSAGES
             std::cout << "ERROR::ShaderManager::registerSource::loadShaderCode::" <<  e.what() << std::endl;
+        #else
+            void(e);
         #endif
 
         return;

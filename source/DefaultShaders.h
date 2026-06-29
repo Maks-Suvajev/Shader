@@ -7,8 +7,6 @@ namespace gfx
     const char* const defaultVertexShaderKey    = "DEFAULT_VERTEX_SHADER";
     const char* const defaultFragmentShaderKey  = "DEFAULT_FRAGMENT_SHADER";
 
-
-
     const char* const defaultVertexShader = R"(
     #version 330 core
 
