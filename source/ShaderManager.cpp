@@ -288,7 +288,7 @@ void ShaderManager::registerElement(const std::filesystem::path& sourcePath)
     if (m_elements.contains(key))
     {
         #ifdef ENABLE_DEBUG_MESSAGES
-            std::cout << "ERROR::Source already loaded with the key: " << sourcePath.string() << std::endl;
+            std::cout << "WARNING::Source already loaded with the key: " << sourcePath.string() << std::endl;
         #endif
 
         return;
